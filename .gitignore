@@ -55,3 +55,6 @@ rsconnect/
 
 # data folder 
 data/*
+
+# README.html
+README.html
