@@ -1,0 +1,146 @@
+---
+title: "Process Mohammed Data"
+author: "Stephanie Hickey"
+date: "2019-11-07"
+output: html_document
+---
+
+## Data acquisition
+### 11-07-19
+
+Data from [_Single-Cell Landscape of Transcriptional Heterogeneity and Cell Fate Decisions during Mouse Early Gastrulation, Mohammed et al. 2017_](http://www.sciencedirect.com/science/article/pii/S2211124717309610)
+
+#### The filtered counts data was downloaded from GEO: [GSE100597](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE100597)
+
+#### Make a meta data table and clean up the rows and columns
+
+```{r, eval=FALSE}
+library(tidyr)
+library(stringr)
+library(base)
+
+setwd("/mnt/home/hickeys6/Documents/Ralston/projects/Mohammed2017/data")
+dat = read.delim("GSE100597_count_table_QC_filtered.txt")
+rownames(dat) = dat$X
+dat$X = NULL
+```
+
+In **dat** rows are genes and columns are cells. I want to make a metadata table from the information in the columns, but the formatting is inconsistant. 
+For example:
+
+*  Sometimes it's "cell"        
+*  Sometimes it's "Cell"    
+*  And Sometimes it's "Cell_"   
+
+```{r, eval=FALSE}
+meta = colnames(dat) 
+meta = str_replace(meta, "cell", "Cell")
+meta = str_replace(meta, "Cell_", "Cell")
+meta = str_replace(meta, "embryo", "Embryo")
+meta = str_replace(meta, "single", "Single")
+meta = str_replace(meta, "double", "Double")
+colnames(dat) = meta
+```
+
+Now I'll separate cell names to get metadata
+
+*  Some cells have "P" info, some don't. I don't know what the "P" info is for
+*  None the less, I don't want to lose information
+
+```{r, eval=FALSE}
+metadf = as.data.frame(meta)
+colnames(metadf) = "CellID"
+metadf = separate(metadf, CellID, c("Stage","Rest"), sep = "_", extra = "merge", remove = FALSE)
+# make a df with only cells with "P" info
+metaP = metadf[grep("P", metadf$Rest),]
+# make a df with only cells without "P" info
+meta_noP = metadf[grep("^[^P]", metadf$Rest),]
+# separate cell names to get metadata
+metaP = separate(metaP, Rest, c("P","Cell_Number", "Embryo", "Singlet_v_Doublet"), sep = "_")
+meta_noP = separate(meta_noP, Rest, c("Cell_Number", "Embryo", "Singlet_v_Doublet"), sep = "_")
+
+# add a "P" column to noP and order columns the same as metaP
+meta_noP$P = rep("NA", nrow(meta_noP))
+meta_noP = meta_noP[,c(1,2,6,3,4,5)]
+
+# rbind the meta data
+meta_final = rbind(metaP, meta_noP)
+```
+
+The meta data table is made, but the rownames are the gene symbol plus a numeric code I don't recognize.
+
+```{r, eval=FALSE}
+# remove the numbers and keep the gene symbols
+gene_codes = rownames(dat)
+gene_symbols = str_extract(gene_codes, "[^_]+")
+head(gene_symbols)
+```
+
+I want to make the gene symbols the row names. But I need to check to see if any of the symbols are duplicated:
+
+I'll remove rows with duplicated rownames and save the data
+```{r, eval=FALSE}
+# remove the duplicated symbols
+symbols_no_dup = gene_symbols[!duplicated(gene_symbols)]
+gene_codes_no_dup = gene_codes[!duplicated(gene_symbols)]
+dat_no_dup = dat[gene_codes_no_dup,]
+rownames(dat_no_dup) = symbols_no_dup
+rawCounts = dat_no_dup
+
+save(rawCounts,meta_final, file = "mohammed_clean.Rdata")
+```
+
+## Clustering with Seurat
+### 12-11-19
+
+```{bash, eval=FALSE}
+ssh dev-intel16-k80.i
+srun -N 1 -t 5:00:00 --mem 64G --pty bash
+module purge
+module load GCC/7.3.0-2.30 OpenMPI/3.1.1
+module load R/3.5.1-X11-20180604
+R --vanilla
+```
+
+#### Make basic QC-plots and cluster
+```{r, eval=FALSE}
+########################################################################
+setwd("/mnt/home/hickeys6/Documents/Ralston/projects/Mohammed2017/data")
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+########################################################################
+
+load("mohammed_clean.Rdata")
+ls()
+dat = CreateSeuratObject(rawCounts)
+# check to see if there are mito genes in the data
+mito.genes <- grep(pattern = "^mt-", x = rownames(rawCounts), value = TRUE, ignore.case = TRUE)
+mito.genes
+# none to be found...
+
+# log normalize the data
+dat <- NormalizeData(dat)
+
+# find variable genes
+dat <- FindVariableFeatures(dat, selection.method = "vst", nfeatures = 2000)
+top10 <- head(VariableFeatures(dat), 10)
+
+# scale the data
+all.genes <- rownames(dat)
+dat <- ScaleData(dat, features = all.genes)
+
+# run PCA
+dat <- RunPCA(dat, features = VariableFeatures(object = dat))
+
+# determine dimentionality
+dat <- JackStraw(dat, num.replicate = 100)
+dat <- ScoreJackStraw(dat, dims = 1:20)
+
+# cluster the cells
+# jackstraw suggests the first 10 PCs
+dat <- FindNeighbors(dat, dims = 1:10)
+dat <- FindClusters(dat, resolution = 0.5)
+
+save(dat, file = "Mohammed2017_seurat.rdata")
+```

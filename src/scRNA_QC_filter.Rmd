@@ -1,0 +1,243 @@
+---
+title: "scRNA-seq Preprocessing and Quality Control"
+author: "Stephanie Hickey"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: show
+params:
+    working_dir: /mnt/ufs18/home-115/hickeys6/Documents/Ralston/projects/
+    project_name: Day17_Reprogramming_scRNA_seq
+    lab: Ralston
+    raw_data_dir: /mnt/ufs18/home-115/hickeys6/Documents/Ralston/projects/data/cellranger_count_Day_17/filtered_feature_bc_matrix
+    pMlo: -Inf
+    pMhi: 10
+    nFeatureHi: Inf
+    nFeatureLo: 1000
+    nCountLo: 5000
+    nCountHi: Inf
+---
+```{r, echo=FALSE, results="asis"}
+## parameterized text
+cat("\n")
+cat("#### Project:", params$project_name, " \n")
+cat("#### Lab:", params$lab, " \n")
+```
+
+## Set up
+### Make project directories 
+```{r, setup}
+project.dir = paste0(params$working_dir, params$project_name)
+if(!dir.exists(project.dir)){dir.create(project.dir)}
+
+data.dir = paste0(project.dir, "/data")
+if(!dir.exists(data.dir)){dir.create(data.dir)}
+
+results.dir = paste0(project.dir, "/results")
+if(!dir.exists(results.dir)){dir.create(results.dir)}
+```
+
+### Set seed and root directory
+```{r}
+knitr::opts_knit$set(root.dir = params$working_dir)
+set.seed(1)
+```
+
+### Load the necessary libraries
+```{r}
+library(tidyverse)
+library(Seurat)
+library(patchwork)
+library(clustree)
+library(filesstrings)
+library(Matrix)
+```
+
+## QC filtering
+### Create the Seurat object 
+Filter for genes expressed in at least 1 cell.
+```{r, message=FALSE}
+# read in the filtered barcode matrix
+cr.data = Read10X(data.dir = params$raw_data_dir)
+
+# make the Seurat object
+seuratOb = CreateSeuratObject(cr.data, 
+                              project = params$project_name,
+                              assay = "RNA",
+                              min.cells = 1)
+seuratOb
+```
+
+### Pre-filtering QC violin plots
+
+Violin plots show the distribution of  
+  
+  * The number of genes (features) detected per cell
+  * The number of UMI counts detected per cell
+  * The percent of mitochondrial gene counts as a fraction of all of the counts in the cell
+      + High mitochondrial gene counts suggest that the cell ruptured before the cell was captured in the GEM, indicating a low quality transcriptome.
+
+In the plots below, each dot is a cell, and we can use these plots to visually identify cutoff ranges
+
+```{r}
+# add percent counts from mitochondrial genes for each cell
+seuratOb[["percent.mt"]] <- PercentageFeatureSet(seuratOb, pattern = "^mt-")
+
+#plot qc violins
+
+plots = VlnPlot(seuratOb,
+                features = c("nFeature_RNA", 
+                             "nCount_RNA", 
+                             "percent.mt"),
+                pt.size = 0,
+                ncol = 3,
+                combine = FALSE)
+
+for(i in 1:length(plots)) {
+  plots[[i]] =
+    plots[[i]] +
+    geom_boxplot(width=0.1, color="black") + 
+    theme(legend.position = 'none',
+          axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+  }
+
+Pall = plots[[1]] + plots[[2]] + plots[[3]]
+
+# save qc violins
+ggsave(Pall, 
+       file = paste0(results.dir, "/QC_vln_", params$project_name, ".pdf"),
+       width = 6,
+       height = 4)
+
+# print qc violins
+Pall
+```
+
+* Median genes expressed per cell = `r median(seuratOb@meta.data$nFeature_RNA)`
+* Median UMI per cell = `r median(seuratOb@meta.data$nCount_RNA)`
+* Median percent mitochondrial reads = `r median(seuratOb@meta.data$percent.mt)`
+
+### QC filtering plots
+
+```{r}
+pMlo = as.numeric(params$pMlo)
+pMhi = as.numeric(params$pMhi)
+nFeatureHi = as.numeric(params$nFeatureHi)
+nFeatureLo = as.numeric(params$nFeatureLo)
+nCountLo = as.numeric(params$nCountLo)
+nCountHi = as.numeric(params$nCountHi)
+```
+
+Filtering for cells with fewer than 5%-10% of the reads coming from mitochondrial genes is pretty standard. So we'll stick with that.
+
+* pMlo = -Inf
+* pMhi = `r pMhi`
+
+The prelim clustering from cellranger indicates that the cells are being grouped mainly by nCounts. Specifically there's a distinct cluster of cells in each run with fewer than `r nCountLo` UMI. 
+
+* nCountLo = `r nCountLo`
+* nCountHi = Inf
+
+Based on the violin plot we'll get rid of the lower tail if we keep cells with at least `r nFeatureHi` expressed genes
+
+* nFeatureHi = Inf
+* nFeatureLo = `r nFeatureLo`
+
+```{r, fig.width = 10, fig.height=4, message = F}
+# plot nCount_RNA vs percent.mt
+plot1 <- FeatureScatter(seuratOb, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "percent.mt") +
+  annotate("rect", 
+           xmin = -Inf, 
+           xmax = Inf, 
+           ymin = pMlo, 
+           ymax = pMhi, 
+           alpha = 0.1, 
+           fill = "green") +
+  annotate("rect", 
+           xmin = nCountLo, 
+           xmax = nCountHi, 
+           ymin = -Inf, 
+           ymax = Inf, 
+           alpha = 0.1, 
+           fill = "blue") +
+  theme(legend.position="none")
+
+# plot nCount_RNA vs nFeature_RNA
+plot2 <- FeatureScatter(seuratOb, 
+                        feature1 = "nCount_RNA", 
+                        feature2 = "nFeature_RNA") +
+  annotate("rect", 
+           xmin = -Inf, 
+           xmax = Inf, 
+           ymin = nFeatureLo, 
+           ymax = nFeatureHi, 
+           alpha = 0.1, 
+           fill = "green") +
+  annotate("rect", 
+           xmin = nCountLo, 
+           xmax = nCountHi, 
+           ymin = -Inf, 
+           ymax = Inf, 
+           alpha = 0.1, 
+           fill = "blue") +
+  theme(legend.position="none")
+
+# save the plots
+pdf(file = paste0(results.dir, "/QC_scatter_", params$project_name ,".pdf"),
+    width = 10,
+    height = 4)
+plot1 + plot2
+dev.off()
+
+# print the plots
+plot1 + plot2
+```
+
+Check how many cells we would have after filtering
+```{r, echo=TRUE}
+check = seuratOb@meta.data %>%
+  filter(percent.mt < pMhi,
+         nFeature_RNA > nFeatureLo,
+         nCount_RNA > nCountLo)
+```
+
+We started with `r nrow(seuratOb@meta.data)` cells. Filter for high-quality cells based on the above criteria.
+```{r}
+seuratOb <- subset(seuratOb, 
+                   subset = nFeature_RNA > nFeatureLo & 
+                            nCount_RNA > nCountLo & 
+                            percent.mt < pMhi)
+```
+
+After  filtering we have `r nrow(check)` high-quality cells. These cells are shaded by both blue and green in the plots above. These cutoffs are not set in stone. We can be as strict or lenient as you would like. The ultimate test is if the clusters ultimately produced by the cells are biologically relevant. Often, low quality cells form their own, meaningless, cluster.
+
+* Median genes expressed per cell after filtering = `r median(seuratOb@meta.data$nFeature_RNA)`
+* Median UMI per cell after filtering = `r median(seuratOb@meta.data$nCount_RNA)`
+* Median percent mitochondrial reads after filtering = `r median(seuratOb@meta.data$percent.mt)`
+
+### Save the Seurat Object
+```{r}
+save(seuratOb,  file = paste0(data.dir, "/", params$project_name, "_QC_filtered_SeuratObject.Rdata"))
+```
+
+```{r, echo=FALSE, results="asis"}
+## parameterized text
+cat("\n")
+cat("Saved here: `", 
+    data.dir,
+    "/",
+    params$project_name,
+    "_QC_filtered_SeuratObject.Rdata`",
+    " \n", 
+    sep = "")
+```
+
+### Session info
+```{r}
+sessionInfo()
+```
+

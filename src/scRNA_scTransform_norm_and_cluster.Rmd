@@ -1,0 +1,392 @@
+---
+title: "scRNA-seq: scTransform and cluster"
+author: "Stephanie Hickey"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: show
+params:
+    working_dir: /mnt/ufs18/home-115/hickeys6/Documents/Ralston/projects/
+    project_name: Day17_Reprogramming_scRNA_seq
+    lab: Ralston
+    seuratOb: Day17_Reprogramming_scRNA_seq_QC_filtered_SeuratObject.Rdata
+    goi: none
+---
+```{r, echo=FALSE, results="asis"}
+## parameterized text
+cat("\n")
+cat("#### Project:", params$project_name, " \n")
+cat("#### Lab:", params$lab, " \n")
+```
+
+## Set up
+### Make project directories 
+```{r, setup}
+project.dir = paste0(params$working_dir, params$project_name)
+if(!dir.exists(project.dir)){dir.create(project.dir)}
+
+data.dir = paste0(project.dir, "/data")
+if(!dir.exists(data.dir)){dir.create(data.dir)}
+
+results.dir = paste0(project.dir, "/results")
+if(!dir.exists(results.dir)){dir.create(results.dir)}
+
+if(params$goi != "none"){
+  gene.dir = paste0(results.dir, "/", params$goi, "_expressing_cells")
+  } else {
+     gene.dir = paste0(results.dir, "/all_cells")}
+
+if(!dir.exists(gene.dir)){dir.create(gene.dir)}
+
+```
+
+### Set seed and sources
+```{r}
+knitr::opts_knit$set(root.dir = params$working_dir)
+set.seed(1)
+
+source(paste0(project.dir, "/src/scRNA_seq_functions.R"))
+```
+
+### Load the necessary libraries
+```{r}
+library(tidyverse)
+library(Seurat)
+library(patchwork)
+library(clustree)
+library(filesstrings)
+library(Matrix)
+```
+
+```{r, echo=FALSE, results="asis"}
+## parameterized header
+if(params$goi == "none"){
+  next_header = "Normalize data"
+  } else {
+    next_header = paste0("Select cells expressing ", params$goi, " and Normalize data")}
+
+cat("\n")
+cat("## ", next_header, " \n")
+```
+
+### load QC'd Seurat object
+```{r}
+load(paste0(data.dir, "/", params$seuratOb))
+seuratOb
+```
+
+```{r, echo=FALSE, results="asis"}
+## parameterized text
+if(params$goi != "none"){
+    next_text = paste0("Select cells expressing ", params$goi)
+    cat("\n")
+    cat("### ", next_text, " \n")}
+```
+
+```{r, eval=params$goi!="none", echo=params$goi!="none", message=FALSE}
+df = GetAssayData(object = seuratOb, slot = "counts")
+keep_cells = colnames(df)[df[params$goi,] >= 1]
+seuratOb = seuratOb[,colnames(seuratOb) %in% keep_cells]
+```
+
+```{r, echo=FALSE, results="asis"}
+## parameterized text
+if(params$goi != "none"){
+    next_text = paste0(length(keep_cells), " cells express ", params$goi)
+    cat("\n")
+    cat(next_text, " \n")}
+```
+
+### scTransform
+```{r, eval=TRUE, echo=TRUE, message=FALSE}
+seuratOb = SCTransform(seuratOb, 
+                       method = "glmGamPoi", 
+                       vars.to.regress = "percent.mt", 
+                       verbose = FALSE)
+```
+
+## Cell-cycle scoring
+
+A list of human cell cycle markers, from Tirosh et al, 2015, is loaded with Seurat. These have been converted to the mouse version of the genes. We'll use the expression of these genes to estimate the cell-cycle phase of each cell.
+```{r eval=FALSE, echo=TRUE, message=FALSE}
+# This is how I got the cc genes, but it takes too long to run everytime
+
+# https://satijalab.org/seurat/archive/v3.1/cell_cycle_vignette.html
+# A list of human cell cycle markers, from Tirosh et al, 2015, is loaded with Seurat.  
+# We can segregate this list into markers of G2/M phase and markers of S phase
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+
+# Basic function to convert human to mouse gene names
+convertHumanGeneList <- function(x){
+  require("biomaRt")
+  human = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+  mouse = useMart("ensembl", dataset = "mmusculus_gene_ensembl")
+  genesV2 = getLDS(attributes = c("hgnc_symbol"), 
+                   filters = "hgnc_symbol", 
+                   values = x , 
+                   mart = human, 
+                   attributesL = c("mgi_symbol"), 
+                   martL = mouse, 
+                   uniqueRows=T)
+  return(genesV2)
+}
+
+s.mouse = convertHumanGeneList(s.genes)
+s.mouse = s.mouse$MGI.symbol
+
+g2m.mouse = convertHumanGeneList(g2m.genes)
+g2m.mouse = g2m.mouse$MGI.symbol
+```
+
+### Cell cycle genes
+```{r, message=FALSE}
+
+s.mouse = c("Exo1", "Msh2","Mcm4","Gmnn","Rrm2", 
+            "Chaf1b","Mcm2","Slbp","Hells", "Cdc6", 
+            "Rpa2","Gins2", "Ubr7","Uhrf1", "Fen1", 
+            "Cdc45", "Rad51ap1", "Cdca7", "Dtl", "Nasp", 
+            "Clspn", "Ung", "Usp1","Dscc1", "Prim1",
+            "Wdr76", "Tipin", "Mcm6","Pola1", "Mcm5", 
+            "Blm", "Casp8ap2", "Tyms", "E2f8","Rfc2", 
+            "Rad51", "Pcna","Ccne2", "Rrm1","Brip1")
+
+g2m.mouse = c("Dlgap5","Ctcf", "Smc4", "Kif20b","Gtse1",
+              "Cdc25c","Cdca3","Tacc3","Ttk","Tpx2",
+              "Top2a","Cks1brt", "G2e3", "Ckap2","Hmgb2",
+              "Anp32e","Lbr","Ncapd2","Cks2", "Cdca2",
+              "Psrc1","Cenpe","Ckap5","Nuf2", "Ect2",
+              "Anln", "Kif2c","Cenpf","Cks1b","Rangap1",
+              "Birc5","Cdca8","Kif11","Hmmr", "Aurkb",
+              "Cdc20","Ndc80","Kif23","Nek2", "Hjurp",
+              "Bub1", "Nusap1","Aurka","Ccnb2","Tubb4b", 
+              "Ube2c","Ckap2l","Cenpa","Mki67" )
+  
+seuratOb = CellCycleScoring(seuratOb, 
+                 s.features = s.mouse, 
+                 g2m.features = g2m.mouse, 
+                 set.ident = FALSE)
+```
+
+## Re-normalize and regress out the cell-cycle scores
+```{r, message=FALSE, warning=FALSE}
+seuratOb <- SCTransform(seuratOb, 
+                        method = "glmGamPoi",
+                        vars.to.regress = c("percent.mt", "S.Score", "G2M.Score"),
+                        verbose = FALSE)
+```
+
+## Dimensionality reduction
+
+Perform dimensionality reduction by PCA and UMAP
+```{r, message=FALSE, warning = FALSE}
+seuratOb <- RunPCA(seuratOb, verbose = FALSE)
+seuratOb <- RunUMAP(seuratOb, 
+                    dims = 1:30, 
+                    verbose = FALSE)
+```
+
+## Clustering
+
+Cluster the cells with multiple resolution parameters and visualize the divisions with `clustree`
+```{r, message=FALSE, fig.height=10}
+seuratOb <- FindNeighbors(seuratOb, 
+                          dims = 1:30, 
+                          verbose = FALSE)
+
+# test resolutions from 0 to 1
+res_vec = seq(0, 1.2, .1)
+seuratOb <- FindClusters(seuratOb, 
+                         verbose = FALSE, 
+                         resolution = res_vec)
+# save plot
+if(params$goi == "none"){
+pdf(file = paste0(results.dir, "/clustree_all_cells.pdf"),
+    width = 6,
+    height = 10)
+print(clustree(seuratOb, prefix = "SCT_snn_res."))
+dev.off()
+} else{
+  pdf(file = paste0(results.dir, "/clustree_", params$goi,"_expressing.pdf"),
+    width = 6,
+    height = 10)
+print(clustree(seuratOb, prefix = "SCT_snn_res."))
+dev.off()
+}
+
+# print clustree
+clustree(seuratOb, prefix = "SCT_snn_res.")
+```
+
+Each row of circles on the clustree plot represents cells clustered at the resolution denoted by SCT_snn_res. Each circle represents a cluster. The arrows show how the cells move from cluster to cluster at different resolutions. in_prop show the proportion of the cells if the receiving cluster that came from the donating cluster. Make plots for all of them.
+
+## Save the Seurat Object
+```{r}
+if(params$goi != "none"){
+  
+  save(seuratOb,  
+     file = paste0(data.dir,
+                   "/", 
+                   params$project_name, 
+                   "_",
+                   params$goi,
+                   "_expressing_QC_filtered_SeuratObject.Rdata"))
+  
+  save_path = paste0(data.dir,
+                   "/", 
+                   params$project_name, 
+                   "_",
+                   params$goi,
+                   "_expressing_QC_filtered_SeuratObject.Rdata")
+  
+} else {
+  save(seuratOb,  
+     file = paste0(data.dir,
+                   "/", 
+                   params$project_name, 
+                   "_QC_filtered_SeuratObject.Rdata"))
+  
+  save_path = paste0(data.dir,
+                   "/", 
+                   params$project_name, 
+                   "_QC_filtered_SeuratObject.Rdata")
+    
+}
+```
+
+```{r, echo=FALSE, results="asis"}
+## parameterized text
+cat("\n")
+cat("Saved here: `", 
+    save_path,
+    "`",
+    " \n", 
+    sep = "")
+```
+
+## Clustering quality control
+
+I want to check if the clusters represent known causes of variation between otherwise similar cells including: 
+
+* percent mitochondria gene expression
+* number of UMI counts
+* number of detected genes
+* inferred cell-cycle phase
+
+```{r, message=FALSE}
+# resolutions of interest
+res_oi = res_vec[2:length(res_vec)]
+
+# loop for making the plots
+for(res in res_oi){
+  
+  # set the identity
+  Idents(object = seuratOb) <- paste0("SCT_snn_res.", res)
+  
+  # cluster plot
+  P1 = DimPlot(seuratOb, label = TRUE) + NoLegend()
+ 
+  # UMI counts
+  P2 = 
+    VlnPlot(seuratOb, 
+            features = "nCount_RNA", 
+            pt.size = 0) + 
+    NoLegend() + 
+    ggtitle("UMI Counts") +
+    xlab("Cluster") +
+    geom_boxplot(width=0.1, color="black")
+  
+  # n Genes
+  P3 = 
+    VlnPlot(seuratOb, 
+            features = "nFeature_RNA",
+            pt.size = 0) + 
+    NoLegend() +
+    ggtitle("nGenes") +
+    xlab("Cluster") +
+    geom_boxplot(width=0.1, color="black")
+  
+  # percent mito
+  P4 = 
+    VlnPlot(seuratOb, 
+            features = "percent.mt",
+            pt.size = 0) + 
+    NoLegend() +
+    ggtitle("Percent mitochondrial reads") +
+    xlab("Cluster") +
+    geom_boxplot(width=0.1, color="black")
+  
+  # select the resolution col of interest and the Phase col
+  select_cols = c(paste0("SCT_snn_res.", res), "Phase")
+  meta_oi = seuratOb@meta.data[,select_cols]
+  
+  # tally the number of cells in each phase per cluster
+  cc_tally = 
+    meta_oi %>%
+    group_by(across()) %>%
+    tally()
+  colnames(cc_tally) = c("Cluster", "Phase", "nCells")
+  
+  # all the tally of phases across all cells
+  all_tally = 
+    meta_oi %>%
+    group_by(Phase) %>%
+    tally() %>%
+    mutate(Cluster = "All.Cells") %>%
+    select(Cluster,
+           Phase,
+           n)
+  colnames(all_tally) = c("Cluster", "Phase", "nCells")
+  
+  # r bind all cells and cluster-wise tally
+  cc_tally = rbind(cc_tally, all_tally)
+  
+  # stacked bar plot with proportion of cells in each cell-cycle phase
+  P5 = ggplot(cc_tally, 
+              aes(fill = Phase,
+                  y = nCells,
+                  x = Cluster)) +
+    geom_bar(position="fill", 
+             stat="identity") +
+    theme_classic() +
+    ggtitle("Proportion cells in each phase") +
+    ylab("proportion of cells")
+  
+  # combine the plots with patchwork
+  Pall = 
+    ((P1/P5) | (P2 + P3 + P4)) +  
+    plot_annotation(title = paste0("resolution = ", res))
+  
+  # Print the plot
+  print(Pall)
+  
+  # save the plot
+  if(params$goi == "none"){
+    
+    ggsave(Pall, 
+         file = paste0(gene.dir, 
+                       "/all_cells_cluster_QC_plots_res", 
+                       res, 
+                       ".png"), 
+         width = 9, 
+         height = 6,
+         dpi = 300)
+  
+  } else {
+     ggsave(Pall, 
+         file = paste0(gene.dir, 
+                       "/", 
+                       params$goi, 
+                       "_expressing_cells_cluster_QC_plots_res", 
+                       res, ".png"), 
+         width = 9, 
+         height = 6,
+         dpi = 300)
+    }
+  }
+```
+
+## Session info
+```{r}
+sessionInfo()
+```

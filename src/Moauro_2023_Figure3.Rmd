@@ -1,0 +1,303 @@
+---
+title: "Moauro et. al., 2023 - Figure 3"
+author: "Stephanie Hickey"
+date: "09/7/2023"
+output: html_document
+---
+
+## Set up
+### Make project directories 
+```{r, setup}
+figures.dir = "/results/figures"
+if(!dir.exists(figures.dir)){dir.create(figures.dir)}
+```
+
+### Set seed and sources
+```{r, message=FALSE, warning=FALSE}
+knitr::opts_knit$set(root.dir = project.dir)
+set.seed(1)
+source("/src/scRNA_seq_functions.R")
+```
+
+### Load the necessary libraries
+```{r, message=FALSE, warning=FALSE}
+library(Seurat)
+library(tidyverse)
+library(patchwork)
+library(viridis)
+```
+
+## Figure 3. Identification of Oct4-expressing cells with primitive endoderm character during OSKM reprogramming by single cell RNA-sequencing.
+
+Load Mohammed Data:
+
+  * Mohammed cluster enriched genes listed in `data/Mohammed2017_TabS1_set_table.Rdata` are copied from [Table S1](https://ars.els-cdn.com/content/image/1-s2.0-S2211124717309610-mmc2.xlsx) -- tab: `SC3 Cluster specific genes` -- Columns: `Enriched genes by SC3 clustering for each lineage (All genes)`   
+  * `data/Mohammed2017_seurat.rdata` was generated as per `src/mohammed_preprocessing.Rmd`    
+
+```{r, message=FALSE, warning=FALSE}
+# enriched genes
+load("/data/Mohammed2017_TabS1_set_table.Rdata")
+
+# seurat object
+load("/data/Mohammed2017_seurat.rdata")
+```
+
+### Figure 3A-B: UMAP and over-representation analysis with Mohammed et. al. markers. All cells res 0.70
+
+Load data and pull all cells UMAP dimensions
+
+  * `data/Day17_Reprogramming_scRNA_seq_QC_filtered_SeuratObject.Rdata` was generated as per `src/scRNA_scTransform_norm_and_cluster.Rmd`    
+  
+```{r}
+load("data/Day17_Reprogramming_scRNA_seq_QC_filtered_SeuratObject.Rdata")
+all_cells_umap = Embeddings(seuratOb, reduction = "umap")[, 1:2]
+```
+
+Load marker genes
+  
+  * `/results/all_cells/SCT_snn_res.0.7_marker_genes.csv` was generated using `src/seuratFindAllMarkers_allRes.R` 
+  
+```{r, message=FALSE, warning=FALSE}
+res_markers = read.csv("/results/all_cells/SCT_snn_res.0.7_marker_genes.csv", header = T, row.names = 1)
+```
+
+Select high confidence markers
+```{r, message=FALSE, warning=FALSE}
+getHighConfidenceGenes = function(marker_df){
+  
+  hiC = 
+    marker_df %>%
+    filter(avg_log2FC >= .25,
+           pct.1 >= .10 | pct.1 >= .10,
+           p_val_adj < .001) %>%
+    select(gene, cluster) %>% 
+    rename(Gene = gene, Set = cluster)
+  
+  hiC$Set = as.character(hiC$Set)
+  
+  return(hiC)
+}
+
+hi_conf = getHighConfidenceGenes(res_markers)
+```
+
+Pull only genes assayed in both datasets
+```{r, message=FALSE, warning=FALSE}
+filterGeneSets = function(reprog_seurat, mohammed_seurat){
+  
+  reprog_genes = rownames(reprog_seurat)
+  mohammed_genes = rownames(mohammed_seurat)
+  background = reprog_genes[reprog_genes %in% mohammed_genes]
+  
+  hi_conf = 
+    hi_conf %>%
+    filter(Gene %in% background)
+  
+  set_table_filt = 
+    set_table %>%
+    filter(Gene %in% background)
+  
+  sets_and_background = list(
+    reprog_set = hi_conf,
+    mohammed_set = set_table_filt,
+    background = background
+  )
+  return(sets_and_background)
+}
+```
+
+Perform hypergeometric test
+```{r, message=FALSE, warning=FALSE}
+sets_and_background = filterGeneSets(seuratOb, dat)
+
+phyper = phyperOverlapSets(sets_and_background$reprog_set,
+                           sets_and_background$mohammed_set,
+                           length(sets_and_background$background))
+
+# save shared genes
+shared = phyper$intersecting.genes
+colnames(shared) = c("ReprgrammingCluster",
+                     "MohammedCellType",
+                     "SharedGene")
+
+write.csv(shared, "results/figures/all_cells_mohammed_shared_genes.csv", row.names = FALSE)
+
+```
+
+Plot with All cells UMAP dimensions and over-representation heat map
+```{r}
+
+magma = c("#fdda9c", "#feb67c",
+          "#fc9065", "#f66c5c", "#e34e65",
+          "#c53c74", "#a6317d", "#862781",
+          "#671b80", "#491078", "#271258")
+  
+plotFig3 = function(res, plot_title) {
+  scores = phyper$pval.scores
+  
+  scores =
+    scores %>%
+    group_by(Group1) %>%
+    mutate(FDR = p.adjust(Pval, "BH")) %>%
+    rename(Reprogramming = Group1,
+           Mohammed.2017 = Group2) 
+  
+  possible_clusters = seq(0,10,1)
+  nclust = length(unique(scores$Reprogramming))
+  
+  scores$FDR[scores$FDR > .01] = 1
+  scores$Reprogramming = factor(scores$Reprogramming, 
+                          levels = possible_clusters[1:nclust])
+
+  plot1 =
+    ggplot(scores,
+           aes(Reprogramming, Mohammed.2017)) + 
+           geom_tile(aes(fill = -log10(FDR)), 
+                     color = "light gray") +
+        #Creating legend
+        guides(fill=guide_colorbar(title = "-log10(FDR)",
+                                   barheight = 10,
+                                   barwidth = 2,
+                                   default.unit = "mm")) +
+        #Creating color range
+        scale_fill_gradientn(colors=c("white",
+                                      "#0E7139"),
+                             guide="colorbar",
+                             limits = c(0, 23)) +
+        #Rotating labels
+        theme(axis.text.x = element_text(angle = 30, 
+                                         hjust = 0,vjust=-0.05),
+              ) +
+        theme(text = element_text(size = 7),
+              axis.text = element_text(size = 7)) +
+        geom_text(aes(label = nSharedGenes), size = 1) +
+        coord_fixed()
+  
+  # set the identity
+  Idents(object = seuratOb) <- res
+  umap_filt = all_cells_umap[colnames(seuratOb),]
+  colnames(umap_filt) <- paste0("allCellsUMAP_", 1:2)
+  seuratOb[["all.cells.UMAP"]] <- CreateDimReducObject(embeddings = umap_filt, 
+                                        key = "allCellsUMAP_", 
+                                        assay = DefaultAssay(seuratOb))
+
+  # cluster plot
+  plot2 = DimPlot(seuratOb, 
+                  reduction = "all.cells.UMAP",
+                  label = FALSE, 
+                  cols = magma[1:nclust],
+                  pt.size = .1) +
+    guides(color = guide_legend(ncol = 2, 
+                                override.aes = list(size = 2))) + 
+    ggtitle(plot_title) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    theme(plot.title = element_text(face="bold")) +
+    theme(text = element_text(size = 8),
+        axis.text = element_text(size = 8)) 
+  
+  
+  fig3_out = plot2 | plot1 #+ plot_layout(heights = c(2,3)) 
+  return(list(fig3_out, plot2))
+}
+
+fig3ab = plotFig3("SCT_snn_res.0.7", "All cells")
+ggsave(fig3ab[[1]], file = "results/figures/fig3ab.png")
+rm(seuratOb, res_markers, hi_conf, sets_and_background, phyper)
+```
+
+### Figure 3D
+
+### Figure 3E-F: UMAP and over-representation analysis with Mohammed et. al. markers. Oct4+ cells res 0.70
+
+Load Seurat object
+
+  * `data/Day17_Reprogramming_scRNA_seq_Pou5f1_expressing_QC_filtered_SeuratObject.Rdata` was generated as per `src/scRNA_scTransform_norm_and_cluster.Rmd`  
+  
+```{r, message=FALSE, warning=FALSE}
+load("data/Day17_Reprogramming_scRNA_seq_Pou5f1_expressing_QC_filtered_SeuratObject.Rdata")
+```
+
+Load marker genes
+
+  * `/results/Pou5f1_expressing_cells/SCT_snn_res.0.7_marker_genes.csv` was generated using `src/seuratFindAllMarkers_allRes.R`    
+  
+```{r, message=FALSE, warning=FALSE}
+res_markers = read.csv("results/Pou5f1_expressing_cells/SCT_snn_res.0.7_marker_genes.csv", header = T, row.names = 1)
+```
+
+Select high confidence markers
+```{r, message=FALSE, warning=FALSE}
+hi_conf = getHighConfidenceGenes(res_markers)
+```
+
+Perform hypergeometric test
+```{r, message=FALSE, warning=FALSE}
+sets_and_background = filterGeneSets(seuratOb, dat)
+
+phyper = phyperOverlapSets(sets_and_background$reprog_set,
+                           sets_and_background$mohammed_set,
+                           length(sets_and_background$background))
+
+# save shared genes
+shared = phyper$intersecting.genes
+colnames(shared) = c("ReprgrammingCluster",
+                     "MohammedCellType",
+                     "SharedGene")
+
+write.csv(shared, "results/figures/Oct4_mohammed_shared_genes.csv", row.names = FALSE)
+```
+
+Plot
+```{r, message=FALSE, warning=FALSE}
+fig3ef = plotFig3("SCT_snn_res.0.7", "Oct4 expressing")
+ggsave(fig3ef[[1]], file = "results/figures/fig3ef.png")
+rm(seuratOb, res_markers, hi_conf, sets_and_background, phyper)
+```
+
+### Figure 3G-H: UMAP and over-representation analysis with Mohammed et. al. markers. Sox2+ cells res 0.70
+
+Load Seurat object
+
+  * `data/Day17_Reprogramming_scRNA_seq_Sox2_expressing_QC_filtered_SeuratObject.Rdata` was generated as per `src/scRNA_scTransform_norm_and_cluster.Rmd`    
+  
+```{r, message=FALSE, warning=FALSE}
+load("data/Day17_Reprogramming_scRNA_seq_Sox2_expressing_QC_filtered_SeuratObject.Rdata")
+```
+
+Load marker genes
+
+  * `/results/Sox2_expressing_cells/SCT_snn_res.0.7_marker_genes.csv` was generated using `src/seuratFindAllMarkers_allRes.R`    
+  
+```{r, message=FALSE, warning=FALSE}
+res_markers = read.csv("results/Sox2_expressing_cells/SCT_snn_res.0.7_marker_genes.csv", header = T, row.names = 1)
+```
+
+Select high confidence markers
+```{r, message=FALSE, warning=FALSE}
+hi_conf = getHighConfidenceGenes(res_markers)
+```
+
+Perform hypergeometric test
+```{r, message=FALSE, warning=FALSE}
+sets_and_background = filterGeneSets(seuratOb, dat)
+
+phyper = phyperOverlapSets(sets_and_background$reprog_set,
+                           sets_and_background$mohammed_set,
+                           length(sets_and_background$background))
+
+# save shared genes
+shared = phyper$intersecting.genes
+colnames(shared) = c("ReprgrammingCluster",
+                     "MohammedCellType",
+                     "SharedGene")
+
+write.csv(shared, "results/figures/Sox2_mohammed_shared_genes.csv", row.names = FALSE)
+```
+
+Plot
+```{r, message=FALSE, warning=FALSE}
+fig3gh = plotFig3("SCT_snn_res.0.7", "Sox2 expressing")
+ggsave(fig3gh[[1]], file = "results/figures/fig3gh.png")
+rm(seuratOb, res_markers, hi_conf, sets_and_background, phyper)
+```
+
