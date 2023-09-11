@@ -6,17 +6,17 @@ output: html_document
 ---
 
 ## Set up
-### Make project directories 
-```{r, setup}
-figures.dir = "/results/figures"
+### Make project `figures` directory 
+```{r, warning=FALSE, message=FALSE}
+figures.dir = "results/figures"
 if(!dir.exists(figures.dir)){dir.create(figures.dir)}
 ```
 
 ### Set seed and sources
 ```{r, message=FALSE, warning=FALSE}
-knitr::opts_knit$set(root.dir = project.dir)
+knitr::opts_knit$set(root.dir = ".")
 set.seed(1)
-source("/src/scRNA_seq_functions.R")
+source("./src/scRNA_seq_functions.R")
 ```
 
 ### Load the necessary libraries
@@ -36,10 +36,10 @@ Load Mohammed Data:
 
 ```{r, message=FALSE, warning=FALSE}
 # enriched genes
-load("/data/Mohammed2017_TabS1_set_table.Rdata")
+load("data/Mohammed2017_TabS1_set_table.Rdata")
 
 # seurat object
-load("/data/Mohammed2017_seurat.rdata")
+load("data/Mohammed2017_seurat.rdata")
 ```
 
 ### Figure 3A-B: UMAP and over-representation analysis with Mohammed et. al. markers. All cells res 0.70
@@ -48,9 +48,14 @@ Load data and pull all cells UMAP dimensions
 
   * `data/Day17_Reprogramming_scRNA_seq_QC_filtered_SeuratObject.Rdata` was generated as per `src/scRNA_scTransform_norm_and_cluster.Rmd`    
   
-```{r}
+```{r, message=FALSE, warning=FALSE}
 load("data/Day17_Reprogramming_scRNA_seq_QC_filtered_SeuratObject.Rdata")
 all_cells_umap = Embeddings(seuratOb, reduction = "umap")[, 1:2]
+```
+
+Change cluster names
+```{r, message=FALSE, warning=FALSE}
+seuratOb@meta.data$SCT_snn_res.0.7_figure3 = as.factor(as.numeric(seuratOb@meta.data$SCT_snn_res.0.7))
 ```
 
 Load marker genes
@@ -58,7 +63,13 @@ Load marker genes
   * `/results/all_cells/SCT_snn_res.0.7_marker_genes.csv` was generated using `src/seuratFindAllMarkers_allRes.R` 
   
 ```{r, message=FALSE, warning=FALSE}
-res_markers = read.csv("/results/all_cells/SCT_snn_res.0.7_marker_genes.csv", header = T, row.names = 1)
+res_markers = read.csv("results/all_cells/SCT_snn_res.0.7_marker_genes.csv", header = T, row.names = 1)
+```
+
+Change cluster names and save 
+```{r, message=FALSE, warning=FALSE}
+res_markers$cluster = as.character(res_markers$cluster + 1)
+write.csv(res_markers, file = "results/figures/SCT_snn_res.0.7_marker_genes_all_cells_figure3_clusters.csv")
 ```
 
 Select high confidence markers
@@ -125,7 +136,7 @@ write.csv(shared, "results/figures/all_cells_mohammed_shared_genes.csv", row.nam
 ```
 
 Plot with All cells UMAP dimensions and over-representation heat map
-```{r}
+```{r, message=FALSE, warning=FALSE, fig.height=3, fig.width=8}
 
 magma = c("#fdda9c", "#feb67c",
           "#fc9065", "#f66c5c", "#e34e65",
@@ -142,35 +153,32 @@ plotFig3 = function(res, plot_title) {
     rename(Reprogramming = Group1,
            Mohammed.2017 = Group2) 
   
-  possible_clusters = seq(0,10,1)
+  #possible_clusters = unique(scores$Reprogramming)
   nclust = length(unique(scores$Reprogramming))
   
   scores$FDR[scores$FDR > .01] = 1
   scores$Reprogramming = factor(scores$Reprogramming, 
-                          levels = possible_clusters[1:nclust])
+                         levels = unique(scores$Reprogramming))
 
   plot1 =
     ggplot(scores,
            aes(Reprogramming, Mohammed.2017)) + 
            geom_tile(aes(fill = -log10(FDR)), 
-                     color = "light gray") +
+                     color = "black") +
         #Creating legend
         guides(fill=guide_colorbar(title = "-log10(FDR)",
-                                   barheight = 10,
-                                   barwidth = 2,
+                                   barheight = 15,
+                                   barwidth = 3,
                                    default.unit = "mm")) +
         #Creating color range
         scale_fill_gradientn(colors=c("white",
                                       "#0E7139"),
                              guide="colorbar",
                              limits = c(0, 23)) +
-        #Rotating labels
-        theme(axis.text.x = element_text(angle = 30, 
-                                         hjust = 0,vjust=-0.05),
-              ) +
         theme(text = element_text(size = 7),
-              axis.text = element_text(size = 7)) +
-        geom_text(aes(label = nSharedGenes), size = 1) +
+              axis.text = element_text(size = 7),
+              axis.ticks = element_blank()) +
+        geom_text(aes(label = nSharedGenes), size = 3) +
         coord_fixed()
   
   # set the identity
@@ -180,7 +188,6 @@ plotFig3 = function(res, plot_title) {
   seuratOb[["all.cells.UMAP"]] <- CreateDimReducObject(embeddings = umap_filt, 
                                         key = "allCellsUMAP_", 
                                         assay = DefaultAssay(seuratOb))
-
   # cluster plot
   plot2 = DimPlot(seuratOb, 
                   reduction = "all.cells.UMAP",
@@ -197,11 +204,12 @@ plotFig3 = function(res, plot_title) {
   
   
   fig3_out = plot2 | plot1 #+ plot_layout(heights = c(2,3)) 
-  return(list(fig3_out, plot2))
+  return(list(fig3_out, plot2, plot1))
 }
 
-fig3ab = plotFig3("SCT_snn_res.0.7", "All cells")
+fig3ab = plotFig3("SCT_snn_res.0.7_figure3", "All cells")
 ggsave(fig3ab[[1]], file = "results/figures/fig3ab.png")
+fig3ab[[1]]
 rm(seuratOb, res_markers, hi_conf, sets_and_background, phyper)
 ```
 
@@ -217,12 +225,49 @@ Load Seurat object
 load("data/Day17_Reprogramming_scRNA_seq_Pou5f1_expressing_QC_filtered_SeuratObject.Rdata")
 ```
 
+Change cluster names
+```{r, message=FALSE, warning=FALSE}
+seuratOb@meta.data$SCT_snn_res.0.7_figure3 = seuratOb@meta.data$SCT_snn_res.0.7
+
+new_names = LETTERS[1:10]
+old_names = as.factor(0:9)
+
+for (i in 1:length(old_names)){
+  
+  seuratOb@meta.data$SCT_snn_res.0.7_figure3 = 
+    gsub(paste0("^(",old_names[i], ")$"), 
+                new_names[i], 
+                seuratOb@meta.data$SCT_snn_res.0.7_figure3)
+  
+}
+
+seuratOb@meta.data$SCT_snn_res.0.7_figure3 = 
+  factor(x = seuratOb@meta.data$SCT_snn_res.0.7_figure3, levels = new_names)
+```
+
 Load marker genes
 
   * `/results/Pou5f1_expressing_cells/SCT_snn_res.0.7_marker_genes.csv` was generated using `src/seuratFindAllMarkers_allRes.R`    
   
 ```{r, message=FALSE, warning=FALSE}
 res_markers = read.csv("results/Pou5f1_expressing_cells/SCT_snn_res.0.7_marker_genes.csv", header = T, row.names = 1)
+```
+
+Change cluster names and save
+```{r, message=FALSE, warning=FALSE}
+new_names = LETTERS[1:10]
+old_names = as.factor(0:9)
+
+for (i in 1:length(old_names)){
+  
+  res_markers$cluster = 
+    gsub(paste0("^(",old_names[i], ")$"), 
+                new_names[i], 
+                res_markers$cluster)
+  
+}
+
+write.csv(res_markers, file = "results/figures/SCT_snn_res.0.7_marker_genes_Pou5f1_expressing_cells_figure3_clusters.csv")
 ```
 
 Select high confidence markers
@@ -248,10 +293,11 @@ write.csv(shared, "results/figures/Oct4_mohammed_shared_genes.csv", row.names = 
 ```
 
 Plot
-```{r, message=FALSE, warning=FALSE}
-fig3ef = plotFig3("SCT_snn_res.0.7", "Oct4 expressing")
+```{r, message=FALSE, warning=FALSE, fig.height=3, fig.width=8}
+fig3ef = plotFig3("SCT_snn_res.0.7_figure3", "Oct4 expressing")
 ggsave(fig3ef[[1]], file = "results/figures/fig3ef.png")
-rm(seuratOb, res_markers, hi_conf, sets_and_background, phyper)
+fig3ef[[1]]
+#rm(seuratOb, res_markers, hi_conf, sets_and_background, phyper)
 ```
 
 ### Figure 3G-H: UMAP and over-representation analysis with Mohammed et. al. markers. Sox2+ cells res 0.70
@@ -264,12 +310,49 @@ Load Seurat object
 load("data/Day17_Reprogramming_scRNA_seq_Sox2_expressing_QC_filtered_SeuratObject.Rdata")
 ```
 
+Change cluster names
+```{r, message=FALSE, warning=FALSE}
+seuratOb@meta.data$SCT_snn_res.0.7_figure3 = seuratOb@meta.data$SCT_snn_res.0.7
+
+new_names = LETTERS[18:26]
+old_names = as.factor(0:8)
+
+for (i in 1:length(old_names)){
+  
+  seuratOb@meta.data$SCT_snn_res.0.7_figure3 = 
+    gsub(paste0("^(",old_names[i], ")$"), 
+                new_names[i], 
+                seuratOb@meta.data$SCT_snn_res.0.7_figure3)
+  
+}
+
+seuratOb@meta.data$SCT_snn_res.0.7_figure3 = 
+  factor(x = seuratOb@meta.data$SCT_snn_res.0.7_figure3, levels = new_names)
+```
+
 Load marker genes
 
   * `/results/Sox2_expressing_cells/SCT_snn_res.0.7_marker_genes.csv` was generated using `src/seuratFindAllMarkers_allRes.R`    
   
 ```{r, message=FALSE, warning=FALSE}
 res_markers = read.csv("results/Sox2_expressing_cells/SCT_snn_res.0.7_marker_genes.csv", header = T, row.names = 1)
+```
+
+Change cluster names and save
+```{r, message=FALSE, warning=FALSE}
+new_names = LETTERS[18:26]
+old_names = as.factor(0:8)
+
+for (i in 1:length(old_names)){
+  
+  res_markers$cluster = 
+    gsub(paste0("^(",old_names[i], ")$"), 
+                new_names[i], 
+                res_markers$cluster)
+  
+}
+
+write.csv(res_markers, file = "results/figures/SCT_snn_res.0.7_marker_genes_Sox2_expressing_cells_figure3_clusters.csv")
 ```
 
 Select high confidence markers
@@ -295,9 +378,15 @@ write.csv(shared, "results/figures/Sox2_mohammed_shared_genes.csv", row.names = 
 ```
 
 Plot
-```{r, message=FALSE, warning=FALSE}
-fig3gh = plotFig3("SCT_snn_res.0.7", "Sox2 expressing")
+```{r, message=FALSE, warning=FALSE, fig.height=3, fig.width=8}
+fig3gh = plotFig3("SCT_snn_res.0.7_figure3", "Sox2 expressing")
 ggsave(fig3gh[[1]], file = "results/figures/fig3gh.png")
+
+fig3gh[[1]]
 rm(seuratOb, res_markers, hi_conf, sets_and_background, phyper)
 ```
 
+## Session info
+```{r, message=FALSE, warning=FALSE}
+sessionInfo()
+```

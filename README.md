@@ -115,4 +115,9 @@ Code for generating the plots in Figure 3 using the output files described above
   * `results/figures/all_cells_mohammed_shared_genes.csv`: Mohammed et al cluster enriched genes shared with 17 day OSKM reprogrammed MEF cluster enriched genes from all cells.  
   * `results/figures/Oct4_mohammed_shared_genes.csv`: Mohammed et al cluster enriched genes shared with 17 day OSKM reprogrammed MEF cluster enriched genes from _Pou5f1_ expressing cells.  
   * `results/figures/Sox2_mohammed_shared_genes.csv`: Mohammed et al cluster enriched genes shared with 17 day OSKM reprogrammed MEF cluster enriched genes from _Sox2_ expressing cells.  
-  * The marker gene `.csv` files made using `seuratFindAllMarkers_allRes.R` are are updated to reflect the cluster names used in Figure 3. 
+  * `results/figures/SCT_snn_res.0.7_marker_genes_all_cells_figure3_clusters.csv`: same as `results/all_cells/SCT_snn_res.0.7_marker_genes.csv` with cluster names that match figure 3. 
+  * `results/figures/SCT_snn_res.0.7_marker_genes_Pou5f1_expressing_cells_figure3_clusters.csv`: same as `results/Pou5f1_expressing_cells/SCT_snn_res.0.7_marker_genes.csv` with cluster names that match figure 3. 
+  * `results/figures/SCT_snn_res.0.7_marker_genes_Sox2_expressing_cells_figure3_clusters.csv`: same as `results/Sox2_expressing_cells/SCT_snn_res.0.7_marker_genes.csv` with cluster names that match figure 3. 
+
+
+
