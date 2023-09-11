@@ -5,6 +5,7 @@ These experiments are described in the paper:
 [_OCT4 is expressed in extraembryonic endoderm stem (XEN) cell progenitors during somatic cell reprogramming_](link)  
 Alexandra Moauro, Stephanie L. Hickey, Michael A. Halbisen, Anthony Parenti, and Amy Ralston*
 
+*Correspondence: aralston@msu.edu
 
 All files in the `data` folder can be found on [Zenodo (doi)](link)
 
@@ -14,7 +15,7 @@ We compared data from [_Single-Cell Landscape of Transcriptional Heterogeneity a
 
 **Rmarkdown**: `src/mohammed_preprocessing.Rmd`
 
-**Main output**: `Mohammed_seurat.rdata`: Used in Moauro_2023_Figure3.Rmd
+**Main output**: `Mohammed_seurat.rdata`: Used in `Moauro_2023_Figure3.Rmd`
 
 **Report**: `reports/mohammed_preprocessing.html`
 
@@ -42,7 +43,7 @@ Quality control and filtering of 17 day OSKM reprogrammed MEFs was performed as 
 
 **Main Output**: `data/Day17_Reprogramming_scRNA_seq_QC_filtered_SeuratObject.Rdata`: a Seurat object containing the filtered UMI count data.  
 
-**Report**: reports/scRNA_QC_filter.html  
+**Report**: `reports/scRNA_QC_filter.html`  
 
 ## Normalization and clustering of 17 day OSKM reprogrammed MEF scRNA-seq data
 
@@ -60,9 +61,21 @@ Quality control and filtering of 17 day OSKM reprogrammed MEFs was performed as 
 
 **Main output**:
 
-  * `data/Day17_Reprogramming_scRNA_seq_QC_filtered_SeuratObject.Rdata`: a Seurat object containing the filtered UMI count data, normalized count data, and cluster assignments from all cells. 
-  * `data/Day17_Reprogramming_scRNA_seq_Pou5f1_expressing_QC_filtered_SeuratObject.Rdata`: a Seurat object containing the filtered UMI count data, normalized count data, and cluster assignments from Pou5f1 expressing cells.  
-  * `data/Day17_Reprogramming_scRNA_seq_Sox2_expressing_QC_filtered_SeuratObject.Rdata`: a Seurat object containing the filtered UMI count data, normalized count data, and cluster assignments from Sox2 expressing cells.  
+  * `data/Day17_Reprogramming_scRNA_seq_QC_filtered_SeuratObject.Rdata`: a Seurat object containing the filtered UMI count data, normalized count data, and cluster assignments from all cells. Clusters at resolution 0.70 were renamed in this figure 3:
+      + cluster 0 in this file = cluster 1 in Figure 3A-B. 
+      + cluster 1 in this file = cluster 2 in Figure 3A-B. 
+      + cluster 2 in this file = cluster 3 in Figure 3A-B. 
+      + And so on 
+  * `data/Day17_Reprogramming_scRNA_seq_Pou5f1_expressing_QC_filtered_SeuratObject.Rdata`: a Seurat object containing the filtered UMI count data, normalized count data, and cluster assignments from Pou5f1 expressing cells. Clusters at resolution 0.70 were renamed in this figure 3:  
+      + cluster 0 in this file = cluster A in Figure 3E-F. 
+      + cluster 1 in this file = cluster B in Figure 3E-F. 
+      + cluster 2 in this file = cluster C in Figure 3E-F. 
+      + And so on 
+  * `data/Day17_Reprogramming_scRNA_seq_Sox2_expressing_QC_filtered_SeuratObject.Rdata`: a Seurat object containing the filtered UMI count data, normalized count data, and cluster assignments from Sox2 expressing cells.Clusters at resolution 0.70 were renamed in this figure 3:  
+      + cluster 0 in this file = cluster R in Figure 3G-H. 
+      + cluster 1 in this file = cluster S in Figure 3G-H. 
+      + cluster 2 in this file = cluster T in Figure 3G-H. 
+      + And so on   
 
 **Reports**:
 
@@ -102,4 +115,4 @@ Code for generating the plots in Figure 3 using the output files described above
   * `results/figures/all_cells_mohammed_shared_genes.csv`: Mohammed et al cluster enriched genes shared with 17 day OSKM reprogrammed MEF cluster enriched genes from all cells.  
   * `results/figures/Oct4_mohammed_shared_genes.csv`: Mohammed et al cluster enriched genes shared with 17 day OSKM reprogrammed MEF cluster enriched genes from _Pou5f1_ expressing cells.  
   * `results/figures/Sox2_mohammed_shared_genes.csv`: Mohammed et al cluster enriched genes shared with 17 day OSKM reprogrammed MEF cluster enriched genes from _Sox2_ expressing cells.  
-  
+  * The marker gene `.csv` files made using `seuratFindAllMarkers_allRes.R` are are updated to reflect the cluster names used in Figure 3. 
