@@ -121,7 +121,7 @@ Code for generating the plots in Figure 3 using the output files described above
 **Main Output**
 
   * `results/figures/fig3ab.png`: A) UMAP visualization of clusters with all cells. B) Over-representation analysis of cluster enriched genes with Mohammed et al cluster enriched genes  
-  * `results/figures/fig3d.png`: D) Over-representation analysis of Mohammed et al cluster enriched genes with genes up-regulated in ES vs XEN cells and XEN vs ES cells.  
+  * `results/figures/fig3d.png`: D) Over-representation analysis of Mohammed et al cluster enriched genes with genes up-regulated in ES vs XEN cells and XEN vs ES cells from Wamaitha et al.  
   * `results/figures/fig3ef.png`: E) UMAP visualization of clusters with _Pou5f1_ expressing cells. F) Over-representation analysis of cluster enriched genes with Mohammed et al cluster enriched genes  
   * `results/figures/fig3ef.png`: G) UMAP visualization of clusters with _Sox2_ expressing cells. H) Over-representation analysis of cluster enriched genes with Mohammed et al cluster enriched genes  
   * `results/figures/all_cells_mohammed_shared_genes.csv`: Mohammed et al cluster enriched genes shared with 17 day OSKM reprogrammed MEF cluster enriched genes from all cells.  
