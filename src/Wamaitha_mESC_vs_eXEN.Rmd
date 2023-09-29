@@ -1,0 +1,170 @@
+---
+title: "Wamaitha et. al. mESC vs eXEN"
+author: "Stephanie Hickey"
+date: "2023-09-28"
+output: html_document
+---
+
+Comparing mESCs and eXEN cell beadarray expression data generated as described in:
+
+Wamaitha *et. al.*, 2015, *Gata6 potently initiates reprograming of pluripotent and differentiated cells to extraembryonic endoderm stem cells*, Genes & Dev. 2015. 29: 1239-1255, [doi:10.1101/gad.257071.114](https://genesdev.cshlp.org/content/29/12/1239.long#sec-9)
+
+
+## Install packages
+```{r, warning=FALSE, message=FALSE, eval=F}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("beadarray")
+BiocManager::install("illuminaMousev2.db")
+```
+
+## load libraries
+```{r,warning=FALSE, message=FALSE}
+library(tidyverse)
+library(beadarray)
+library(WGCNA)
+library(illuminaMousev2.db)
+library(limma)
+```
+
+## Download raw bead array data from GEO
+
+[GSE69321_Non-normalized_data.txt.gz](https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE69321&format=file&file=GSE69321%5FNon%2Dnormalized%5Fdata%2Etxt%2Egz). Move to `data` folder
+
+```{r, warning=FALSE, message=FALSE}
+
+dat_all = read.delim("data/GSE69321_Non-normalized_data.txt.gz")
+
+# select columns of interest
+dat_meta = dat_all[,1:27]
+dat_vals = dat_all[,grep("mESC|eXEN", colnames(dat_all))]
+dat = cbind(dat_meta, dat_vals)
+
+# write out files
+write.table(dat, 
+            file = "data/probe_raw.txt", 
+            row.names = FALSE,
+            quote = FALSE,
+            sep = "\t")
+```
+
+## Use `beadarray` package to re-analyze data
+
+Following this [vignette](https://bioconductor.org/packages/release/bioc/vignettes/beadarray/inst/doc/beadsummary.pdf)
+
+### Load data into beadsummary object
+```{r, warning=FALSE, message=FALSE}
+# no qc files available
+
+BSData = readBeadSummaryData(dataFile = "data/probe_raw.txt",
+                             skip = 0,
+                             ProbeID= "ID_REF",
+                             columns = list(exprs = "AVG_Signal",
+                                            Detection = "Detection.Pval"))
+```
+
+### Filtering non-responding probes
+
+```{r, warning=FALSE, message=FALSE}
+BSData <- addFeatureData(BSData,
+                           toAdd = c("SYMBOL", 
+                                     "PROBEQUALITY",
+                                     "CODINGZONE", 
+                                     "PROBESEQUENCE",
+                                     "GENOMICLOCATION"),
+                            annotation = "Mousev2")
+
+ids <- as.character(featureNames(BSData))
+qual <- unlist(mget(ids, illuminaMousev2PROBEQUALITY, ifnotfound=NA))
+rem <- qual == "No match" | qual == "Bad" | is.na(qual)
+
+BSData.filt <- BSData[!rem,]
+```
+
+### Selecting probe with highest average expression across samples to represent each gene
+
+As suggested by [JA Miller et. al., 2011](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3166942/)
+```{r, warning=FALSE, message=FALSE}
+
+expr.log2 = log2(exprs(BSData.filt)+1)
+probe = fData(BSData.filt)$ProbeID
+SYMBOL = fData(BSData.filt)$SYMBOL
+
+expr.collapse = 
+  collapseRows(expr.log2, 
+              rowGroup = SYMBOL, 
+              rowID = probe, 
+              method="MaxMean")
+```
+
+### Median Log2 expression boxplot
+```{r, warning=FALSE, message=FALSE}
+
+long.log2 = 
+  pivot_longer(as.data.frame(expr.collapse$datETcollapsed), 
+               cols = everything(), 
+               names_to = "sample", 
+               values_to = "log2_expr")
+
+ggplot(long.log2, aes(x = sample, y = log2_expr)) +
+  geom_boxplot()
+
+```
+
+### Log2 and Quantile normalize the data
+```{r, warning=FALSE, message=FALSE}
+
+keep = names(expr.collapse$selectedRow)[expr.collapse$selectedRow == TRUE]
+BSData.filt = BSData.filt[keep,]
+
+BS.filt.qnorm = normaliseIllumina(BSData.filt, 
+                             method="quantile", 
+                             transform="log2")
+
+expr.qnorm = exprs(BS.filt.qnorm)
+
+long.qnorm = 
+  pivot_longer(as.data.frame(expr.qnorm), 
+               cols = everything(), 
+               names_to = "sample", 
+               values_to = "qnorm_exp")
+
+ggplot(long.qnorm, aes(x = sample, y = qnorm_exp)) +
+  geom_boxplot()
+```
+
+### Differential expression analysis
+```{r}
+pData(BS.filt.qnorm)$CellType = c(rep("mESC",4), rep("eXEN",2))
+
+CellType_ <- pData(BS.filt.qnorm)$CellType
+
+design <- model.matrix(~0+CellType_)
+
+aw <- arrayWeights(exprs(BS.filt.qnorm), design)
+
+fit <- lmFit(exprs(BS.filt.qnorm), 
+             design, 
+             weights=aw)
+
+contrasts <- 
+  makeContrasts(CellType_mESC-CellType_eXEN,
+                levels=design)
+
+contr.fit <- eBayes(contrasts.fit(fit, contrasts))
+
+res = topTable(contr.fit, 
+               number =nrow(exprs(BS.filt.qnorm)))
+
+res$ID_REF = rownames(res)
+res$SYMBOL = unlist(mget(res$ID_REF, illuminaMousev2SYMBOL, ifnotfound=NA))
+map = dat %>% dplyr::select(Probe_ID, ID_REF)
+res = left_join(res, map)
+
+goi = c("Pou5f1", "Nanog", "Sox2", "Gata6", "Gata4", "Sox7", "Sox17")
+check = res %>% filter(SYMBOL %in% goi) %>% arrange(logFC)
+knitr::kable(check, caption = "Limma results for canonical XEN and ES genes")
+
+write.csv(res, file = "results/Wamaitha_mESC_vs_eXEN_DE.csv", row.names = F)
+```

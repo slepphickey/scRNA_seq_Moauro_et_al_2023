@@ -213,7 +213,73 @@ fig3ab[[1]]
 rm(seuratOb, res_markers, hi_conf, sets_and_background, phyper)
 ```
 
-### Figure 3D
+### Figure 3D: Over-representation analysis between Mohammed et. al. markers and Wamaitha et. al. mESC vs eXEN DE genes.
+
+```{r, message=FALSE, warning=FALSE, fig.height=3, fig.width=8}
+
+wamaitha_de = read.csv("results/Wamaitha_mESC_vs_eXEN_DE.csv")
+
+wamaitha_genes = wamaitha_de$SYMBOL
+mohammed_genes = rownames(dat)
+
+background = wamaitha_genes[wamaitha_genes %in% mohammed_genes]
+  
+wamaitha_sig =
+  wamaitha_de %>%
+  filter(adj.P.Val < .01, SYMBOL %in% background) %>%
+  mutate(Set = case_when(
+    logFC > 0 ~ "ES",
+    logFC < 0 ~ "XEN"
+  )) %>%
+  select(SYMBOL, Set)
+ 
+set_table_filt = 
+  set_table %>%
+  filter(Gene %in% background)
+  
+phyper = phyperOverlapSets(wamaitha_sig,
+                           set_table_filt,
+                           length(background))
+
+scores = phyper$pval.scores
+  
+  scores =
+    scores %>%
+    group_by(Group1) %>%
+    mutate(FDR = p.adjust(Pval, "BH")) %>%
+    rename(ESvsXEN = Group1,
+           Mohammed.2017 = Group2) 
+
+  scores$FDR[scores$FDR > .01] = 1
+  scores$Reprogramming = factor(scores$ESvsXEN, 
+                         levels = unique(scores$ESvsXEN))
+
+  plot1 =
+    ggplot(scores,
+           aes(ESvsXEN, Mohammed.2017)) + 
+           geom_tile(aes(fill = -log10(FDR)), 
+                     color = "black") +
+        #Creating legend
+        guides(fill=guide_colorbar(title = "-log10(FDR)",
+                                   barheight = 15,
+                                   barwidth = 3,
+                                   default.unit = "mm")) +
+        #Creating color range
+        scale_fill_gradientn(colors=c("white",
+                                      "#0E7139"),
+                             guide="colorbar",
+                             limits = c(0, 45)) +
+        theme(text = element_text(size = 8),
+              axis.text = element_text(size = 8),
+              axis.ticks = element_blank(),
+              axis.title.x=element_blank(),
+              axis.title.y=element_blank()) +
+        geom_text(aes(label = nSharedGenes), size = 3) +
+        coord_fixed()
+  
+ggsave("results/figures/fig3d.png", width = 3, height = 4)
+plot1
+```
 
 ### Figure 3E-F: UMAP and over-representation analysis with Mohammed et. al. markers. Oct4+ cells res 0.70
 
