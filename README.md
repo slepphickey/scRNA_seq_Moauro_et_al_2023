@@ -1,5 +1,5 @@
 # Single-Cell RNA-seq analysis for Moauro et al 2023
-![](https://github.com/slepphickey/scRNA_seq_Moauro_et_al_2023/blob/main/zenodo_doi.svg)
+This repository: ![](https://github.com/slepphickey/scRNA_seq_Moauro_et_al_2023/blob/main/zenodo_doi.svg)
 
 These experiments are described in the paper:
 
@@ -8,7 +8,7 @@ Alexandra Moauro, Stephanie L. Hickey, Michael A. Halbisen, Anthony Parenti, and
 
 *Correspondence: aralston@msu.edu
 
-All files in the `data` folder can be found on [Zenodo (doi)](link)
+All files in the `data` folder, including the scRNA-seq raw count data, can be found on [Zenodo (doi)](link)
 
 ## Processing Mouse Early Gastrulation scRNA-seq data from Mohammed et al, 2017
 
@@ -16,7 +16,7 @@ We compared data from [_Single-Cell Landscape of Transcriptional Heterogeneity a
 
 **Rmarkdown**: `src/mohammed_preprocessing.Rmd`
 
-**Main output**: `Mohammed_seurat.rdata`: Used in `Moauro_2023_Figure3.Rmd`
+**Main output**: `data/Mohammed_seurat.rdata`: Used in `Moauro_2023_Figure3.Rmd`
 
 **Report**: `reports/mohammed_preprocessing.html`
 
@@ -48,7 +48,7 @@ Quality control and filtering of 17 day OSKM reprogrammed MEFs was performed as 
 
 ## Normalization and clustering of 17 day OSKM reprogrammed MEF scRNA-seq data
 
-17 day OSKM reprogrammed MEF scRNA-seq data normalized using `scTransform` and clustered at multiple resolutions as described in the following documents. Either all cells were included in the analysis, or _Pou5f1_ or _Sox2_ positive cells were extracted before normalization and clustering.
+17 day OSKM reprogrammed MEF scRNA-seq data were normalized using `scTransform` and clustered at multiple resolutions as described in the following documents. Either all cells were included in the analysis, or _Pou5f1_ or _Sox2_ positive cells were extracted before normalization and clustering.
 
 **Rmarkdown**: `src/scRNA_scTransform_norm_and_cluster.Rmd`
 
@@ -72,7 +72,7 @@ Quality control and filtering of 17 day OSKM reprogrammed MEFs was performed as 
       + cluster 1 in this file = cluster B in Figure 3E-F. 
       + cluster 2 in this file = cluster C in Figure 3E-F. 
       + And so on 
-  * `data/Day17_Reprogramming_scRNA_seq_Sox2_expressing_QC_filtered_SeuratObject.Rdata`: a Seurat object containing the filtered UMI count data, normalized count data, and cluster assignments from Sox2 expressing cells.Clusters at resolution 0.70 were renamed in this figure 3:  
+  * `data/Day17_Reprogramming_scRNA_seq_Sox2_expressing_QC_filtered_SeuratObject.Rdata`: a Seurat object containing the filtered UMI count data, normalized count data, and cluster assignments from Sox2 expressing cells. Clusters at resolution 0.70 were renamed in this figure 3:  
       + cluster 0 in this file = cluster R in Figure 3G-H. 
       + cluster 1 in this file = cluster S in Figure 3G-H. 
       + cluster 2 in this file = cluster T in Figure 3G-H. 
@@ -111,7 +111,7 @@ Wamaitha *et. al.*, 2015, *Gata6 potently initiates reprograming of pluripotent 
 
 **Output**: `results/Wamaitha_mESC_vs_eXEN_DE.csv`
 
-**Report**: `reports/Wamaitha_mESC_vs_eXEN.Rmd`
+**Report**: `reports/Wamaitha_mESC_vs_eXEN.html`
 
 ## Figure 3 plots
 
