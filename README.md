@@ -100,6 +100,18 @@ Quality control and filtering of 17 day OSKM reprogrammed MEFs was performed as 
   * `results/Pou5f1_expressing_cells/SCT_snn_res.0.7_marker_genes.csv`: Using `data/Day17_Reprogramming_scRNA_seq_Pou5f1_expressing_QC_filtered_SeuratObject.Rdata` as input. 
   * `results/Sox2_expressing_cells/SCT_snn_res.0.7_marker_genes.csv`: Using `data/Day17_Reprogramming_scRNA_seq_Sox2_expressing_QC_filtered_SeuratObject.Rdata` as input. 
 
+## Wamaitha et. al. mESC vs eXEN DE genes
+
+Obtaining genes differentially expressed between mESCs and eXEN cell beadarray expression data generated as described in:
+
+Wamaitha *et. al.*, 2015, *Gata6 potently initiates reprograming of pluripotent and differentiated cells to extraembryonic endoderm stem cells*, Genes & Dev. 2015. 29: 1239-1255, [doi:10.1101/gad.257071.114](https://genesdev.cshlp.org/content/29/12/1239.long#sec-9)
+
+**Rmarkdown**: `src/Wamaitha_mESC_vs_eXEN.Rmd`
+
+**Output**: `results/Wamaitha_mESC_vs_eXEN_DE.csv`
+
+**Report**: `reports/Wamaitha_mESC_vs_eXEN.Rmd`
+
 ## Figure 3 plots
 
 Code for generating the plots in Figure 3 using the output files described above
@@ -118,6 +130,3 @@ Code for generating the plots in Figure 3 using the output files described above
   * `results/figures/SCT_snn_res.0.7_marker_genes_all_cells_figure3_clusters.csv`: same as `results/all_cells/SCT_snn_res.0.7_marker_genes.csv` with cluster names that match figure 3. 
   * `results/figures/SCT_snn_res.0.7_marker_genes_Pou5f1_expressing_cells_figure3_clusters.csv`: same as `results/Pou5f1_expressing_cells/SCT_snn_res.0.7_marker_genes.csv` with cluster names that match figure 3. 
   * `results/figures/SCT_snn_res.0.7_marker_genes_Sox2_expressing_cells_figure3_clusters.csv`: same as `results/Sox2_expressing_cells/SCT_snn_res.0.7_marker_genes.csv` with cluster names that match figure 3. 
-
-
-
