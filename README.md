@@ -8,7 +8,7 @@ Alexandra Moauro, Stephanie L. Hickey, Michael A. Halbisen, Anthony Parenti, and
 
 *Correspondence: aralston@msu.edu
 
-All files in the `data` folder, including the scRNA-seq raw count data, can be found on [Zenodo (doi)](link)
+All files in the `data` folder, including the scRNA-seq raw count data, can be found on [Zenodo (doi.org/10.5281/zenodo.8388276)](https://doi.org/10.5281/zenodo.8388276)
 
 ## Processing Mouse Early Gastrulation scRNA-seq data from Mohammed et al, 2017
 
